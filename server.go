@@ -21,27 +21,13 @@ func main() {
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
+	h := Handler{db: db}
 
-	e.GET("/todos", func(c echo.Context) error {
-		return indexHandler(c, db)
-	})
-
-	e.POST("/todos", func(c echo.Context) error {
-		return createHandler(c, db)
-	})
-
-	e.GET("/todos/:id", func(c echo.Context) error {
-		return retrieveHandler(c, db)
-	})
-
-	e.POST("/todos/:id", func(c echo.Context) error {
-		return updateHandler(c, db)
-	})
-
-	e.DELETE("/todos/:id", func(c echo.Context) error {
-		return deleteHandler(c, db)
-	})
+	e.GET("/todos", h.indexHandler)
+	e.POST("/todos", h.createHandler)
+	e.GET("/todos/:id", h.retrieveHandler)
+	e.POST("/todos/:id", h.updateHandler)
+	e.DELETE("/todos/:id", h.deleteHandler)
 
 	e.Logger.Fatal(e.Start(":1323"))
-
 }
