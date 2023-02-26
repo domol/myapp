@@ -23,11 +23,11 @@ func main() {
 	}
 	h := Handler{db: db}
 
-	e.GET("/todos", h.indexHandler)
-	e.POST("/todos", h.createHandler)
-	e.GET("/todos/:id", h.retrieveHandler)
-	e.POST("/todos/:id", h.updateHandler)
-	e.DELETE("/todos/:id", h.deleteHandler)
+	e.GET("/todos", h.list)
+	e.POST("/todos", h.create)
+	e.GET("/todos/:id", h.retrieve)
+	e.POST("/todos/:id", h.update)
+	e.DELETE("/todos/:id", h.delete)
 
 	e.Logger.Fatal(e.Start(":1323"))
 }

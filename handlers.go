@@ -30,7 +30,7 @@ func (h Handler) getTodo(id int) (Todo, error) {
 	return res, nil
 }
 
-func (h Handler) indexHandler(c echo.Context) error {
+func (h Handler) list(c echo.Context) error {
 	var todos []Todo
 
 	log := c.Logger()
@@ -51,7 +51,7 @@ func (h Handler) indexHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, todos)
 }
 
-func (h Handler) createHandler(c echo.Context) error {
+func (h Handler) create(c echo.Context) error {
 	var res Todo
 	var id int
 	description := c.FormValue("description")
@@ -72,7 +72,7 @@ func (h Handler) createHandler(c echo.Context) error {
 	return c.JSON(http.StatusCreated, res)
 }
 
-func (h Handler) deleteHandler(c echo.Context) error {
+func (h Handler) delete(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -88,7 +88,7 @@ func (h Handler) deleteHandler(c echo.Context) error {
 	return c.String(http.StatusOK, "")
 }
 
-func (h Handler) retrieveHandler(c echo.Context) error {
+func (h Handler) retrieve(c echo.Context) error {
 	log := c.Logger()
 
 	idStr := c.Param("id")
@@ -107,7 +107,7 @@ func (h Handler) retrieveHandler(c echo.Context) error {
 	return c.JSON(http.StatusOK, todo)
 }
 
-func (h Handler) updateHandler(c echo.Context) error {
+func (h Handler) update(c echo.Context) error {
 	log := c.Logger()
 
 	idStr := c.Param("id")
