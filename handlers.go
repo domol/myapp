@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"net/http"
 	"strconv"
 
@@ -10,42 +9,15 @@ import (
 )
 
 type Handler struct {
-	db *sql.DB
-}
-
-func (h Handler) getTodo(id int) (Todo, error) {
-	var res Todo
-
-	rows, err := h.db.Query("SELECT * FROM todos WHERE id=$1", id)
-	if err != nil {
-		return res, err
-	}
-	if !rows.Next() {
-		return res, echo.ErrNotFound
-	}
-	if err := rows.Scan(&res.ID, &res.Description, &res.IsDone); err != nil {
-		return res, err
-	}
-
-	return res, nil
+	todoRepo TodoRepository
 }
 
 func (h Handler) list(c echo.Context) error {
-	var todos []Todo
-
 	log := c.Logger()
 
-	rows, err := h.db.Query("SELECT * FROM todos")
+	todos, err := h.todoRepo.list()
 	if err != nil {
-		return c.String(http.StatusFailedDependency, "An error occured.")
-	}
-
-	for rows.Next() {
-		var res Todo
-		if err := rows.Scan(&res.ID, &res.Description, &res.IsDone); err != nil {
-			log.Error("An error occured while executing query: %v", err)
-		}
-		todos = append(todos, res)
+		log.Error("An error occured while executing query: %v", err)
 	}
 
 	return c.JSON(http.StatusOK, todos)
@@ -53,18 +25,12 @@ func (h Handler) list(c echo.Context) error {
 
 func (h Handler) create(c echo.Context) error {
 	var res Todo
-	var id int
 	description := c.FormValue("description")
-	log := c.Logger()
-
-	// result, err := db.Exec("INSERT INTO todos (description,is_done) VALUES ('hvhvhvh','f')  RETURNING id ", description)
-	err := h.db.QueryRow("INSERT INTO todos ( description, is_done ) VALUES ( $1, false ) RETURNING id", description).Scan(&id)
-	if err != nil {
-		log.Fatal("An error occured while executing query: %v", err)
+	if len(description) == 0 {
+		return c.String(http.StatusExpectationFailed, "Field description is required.")
 	}
-
-	res, err = h.getTodo(id)
-
+	log := c.Logger()
+	res, err := h.todoRepo.create(description)
 	if err != nil {
 		log.Fatal("An error occured while executing query: %v", err)
 	}
@@ -81,10 +47,11 @@ func (h Handler) delete(c echo.Context) error {
 
 	log := c.Logger()
 
-	_, err = h.db.Exec("DELETE from todos WHERE id=$1", id)
+	err = h.todoRepo.delete(int64(id))
 	if err != nil {
 		log.Fatal("An error occured while executing query: %v", err)
 	}
+
 	return c.String(http.StatusOK, "")
 }
 
@@ -99,12 +66,23 @@ func (h Handler) retrieve(c echo.Context) error {
 
 	log.Error("get todo", id)
 
-	todo, err := h.getTodo(id)
+	todo, err := h.todoRepo.get(int64(id))
 	if err != nil {
 		return c.NoContent(http.StatusNotFound)
 	}
 
 	return c.JSON(http.StatusOK, todo)
+}
+
+func (h Handler) _getFormValues(c echo.Context, todo *Todo) (err error) {
+	todo.Description = c.FormValue("description")
+
+	isDoneString := c.FormValue("is_done")
+	todo.IsDone, err = strconv.ParseBool(isDoneString)
+	if err != nil {
+		return c.String(http.StatusExpectationFailed, "is_done must be true or false.")
+	}
+	return
 }
 
 func (h Handler) update(c echo.Context) error {
@@ -116,18 +94,15 @@ func (h Handler) update(c echo.Context) error {
 		return c.String(http.StatusExpectationFailed, "ID must be integer.")
 	}
 
-	description := c.FormValue("description")
-	isDone := c.FormValue("is_done")
-	result, err := h.db.Exec("UPDATE todos SET description=$1, is_done=$2 WHERE id=$3", description, isDone, id)
+	data := Todo{}
+	h._getFormValues(c, &data)
+
+	err = h.todoRepo.update(int64(id), data)
 	if err != nil {
-		log.Fatal("An error occured while executing query: %v", err)
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil || rowsAffected != 1 {
-		log.Fatal("An error occured while executing query: %v", err)
+		log.Fatal("Could not update todo. %v", err)
 	}
 
-	todo, err := h.getTodo(id)
+	todo, err := h.todoRepo.get(int64(id))
 	if err != nil {
 		log.Fatal("An error occured while executing query: %v", err)
 	}

@@ -7,12 +7,6 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type Todo struct {
-	ID          int64  `json:"id" xml:"id"`
-	Description string `json:"description" xml:"description"`
-	IsDone      bool   `json:"is_done" xml:"isDone"`
-}
-
 func main() {
 	connectionString := "postgresql://postgres:password@localhost:5432/todos?sslmode=disable"
 
@@ -21,7 +15,9 @@ func main() {
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
-	h := Handler{db: db}
+
+	repo := TodoRepository{db: db}
+	h := Handler{todoRepo: repo}
 
 	e.GET("/todos", h.list)
 	e.POST("/todos", h.create)
