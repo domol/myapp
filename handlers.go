@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -9,30 +11,28 @@ import (
 )
 
 type Handler struct {
-	todoRepo TodoRepository
+	todoRepo Repo[Todo]
 }
 
 func (h Handler) list(c echo.Context) error {
-	log := c.Logger()
-
 	todos, err := h.todoRepo.list()
 	if err != nil {
-		log.Error("An error occured while executing query: %v", err)
+		return getServerErrorResponse(c, "Error connecting to the database.")
 	}
 
 	return c.JSON(http.StatusOK, todos)
 }
 
 func (h Handler) create(c echo.Context) error {
-	var res Todo
-	description := c.FormValue("description")
-	if len(description) == 0 {
-		return c.String(http.StatusExpectationFailed, "Field description is required.")
-	}
-	log := c.Logger()
-	res, err := h.todoRepo.create(description)
+	var data Todo
+	err := c.Bind(&data)
 	if err != nil {
-		log.Fatal("An error occured while executing query: %v", err)
+		return getBadRequestResponse(c, "Error parsing data.")
+	}
+
+	res, err := h.todoRepo.create(data)
+	if err != nil {
+		return getServerErrorResponse(c, "Database error.")
 	}
 
 	return c.JSON(http.StatusCreated, res)
@@ -42,69 +42,55 @@ func (h Handler) delete(c echo.Context) error {
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		return c.String(http.StatusExpectationFailed, "ID must be integer.")
+		return getBadRequestResponse(c, "ID must be integer.")
 	}
-
-	log := c.Logger()
 
 	err = h.todoRepo.delete(int64(id))
 	if err != nil {
-		log.Fatal("An error occured while executing query: %v", err)
+		return getServerErrorResponse(c, "DB error response.")
 	}
-
-	return c.String(http.StatusOK, "")
+	return c.NoContent(http.StatusNoContent)
 }
 
 func (h Handler) retrieve(c echo.Context) error {
-	log := c.Logger()
-
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		return c.String(http.StatusExpectationFailed, "ID must be integer.")
+		return getBadRequestResponse(c, "ID must be integer.")
 	}
-
-	log.Error("get todo", id)
 
 	todo, err := h.todoRepo.get(int64(id))
 	if err != nil {
-		return c.NoContent(http.StatusNotFound)
+		if errors.Is(err, ErrNotFound) {
+			return c.NoContent(http.StatusNotFound)
+		}
+		return getServerErrorResponse(c, "Failed to fetch object.")
 	}
 
 	return c.JSON(http.StatusOK, todo)
 }
 
-func (h Handler) _getFormValues(c echo.Context, todo *Todo) (err error) {
-	todo.Description = c.FormValue("description")
-
-	isDoneString := c.FormValue("is_done")
-	todo.IsDone, err = strconv.ParseBool(isDoneString)
-	if err != nil {
-		return c.String(http.StatusExpectationFailed, "is_done must be true or false.")
-	}
-	return
-}
-
 func (h Handler) update(c echo.Context) error {
-	log := c.Logger()
-
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		return c.String(http.StatusExpectationFailed, "ID must be integer.")
+		return getBadRequestResponse(c, "ID must be integer.")
 	}
 
-	data := Todo{}
-	h._getFormValues(c, &data)
+	var data Todo
+	err = c.Bind(&data)
+	if err != nil {
+		return getBadRequestResponse(c, "Error parsing data.")
+	}
 
 	err = h.todoRepo.update(int64(id), data)
 	if err != nil {
-		log.Fatal("Could not update todo. %v", err)
+		return getServerErrorResponse(c, fmt.Sprintf("Couldn't update todo: %v", err))
 	}
 
 	todo, err := h.todoRepo.get(int64(id))
 	if err != nil {
-		log.Fatal("An error occured while executing query: %v", err)
+		getServerErrorResponse(c, fmt.Sprintf("An error occured while executing query: %v", err))
 	}
 	return c.JSON(http.StatusOK, todo)
 }
