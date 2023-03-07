@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/labstack/echo/v4"
 	_ "github.com/lib/pq"
 )
@@ -28,6 +29,10 @@ func (h Handler) create(c echo.Context) error {
 	err := c.Bind(&data)
 	if err != nil {
 		return getBadRequestResponse(c, "Error parsing data.")
+	}
+	valid, err := govalidator.ValidateStruct(data)
+	if !valid {
+		return getBadRequestResponse(c, err.Error())
 	}
 
 	res, err := h.todoRepo.create(data)
@@ -81,6 +86,11 @@ func (h Handler) update(c echo.Context) error {
 	err = c.Bind(&data)
 	if err != nil {
 		return getBadRequestResponse(c, "Error parsing data.")
+	}
+
+	valid, err := govalidator.ValidateStruct(data)
+	if !valid {
+		return getBadRequestResponse(c, err.Error())
 	}
 
 	err = h.todoRepo.update(int64(id), data)
