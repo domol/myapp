@@ -8,13 +8,13 @@ import (
 )
 
 type ErrorResponse struct {
-	detail string
+	Detail string `json:"detail" xml:"detail"`
 }
 
 func getServerErrorResponse(c echo.Context, detail string) error {
-	return c.JSON(http.StatusServiceUnavailable, ErrorResponse{detail: detail})
+	return c.JSON(http.StatusServiceUnavailable, ErrorResponse{Detail: detail})
 }
 
 func getBadRequestResponse(c echo.Context, detail string) error {
-	return c.JSON(http.StatusBadRequest, ErrorResponse{detail: detail})
+	return c.JSON(http.StatusBadRequest, ErrorResponse{Detail: detail})
 }
