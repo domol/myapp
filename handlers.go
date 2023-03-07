@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -18,21 +19,25 @@ func (h Handler) list(c echo.Context) error {
 	todos, err := h.todoRepo.list()
 	if err != nil {
 		log.Error("An error occured while executing query: %v", err)
+		return c.JSON(http.StatusInternalServerError, nil)
 	}
 
 	return c.JSON(http.StatusOK, todos)
 }
 
 func (h Handler) create(c echo.Context) error {
-	var res Todo
-	description := c.FormValue("description")
-	if len(description) == 0 {
-		return c.String(http.StatusExpectationFailed, "Field description is required.")
+	var body Todo
+	if err := c.Bind(&body); err != nil {
+		return c.JSON(http.StatusBadRequest, err)
 	}
-	log := c.Logger()
-	res, err := h.todoRepo.create(description)
+
+	if err := body.Validate(); err != nil {
+		return c.JSON(http.StatusBadRequest, err)
+	}
+
+	res, err := h.todoRepo.create(body.Description)
 	if err != nil {
-		log.Fatal("An error occured while executing query: %v", err)
+		return c.JSON(http.StatusInternalServerError, nil)
 	}
 
 	return c.JSON(http.StatusCreated, res)
@@ -45,30 +50,27 @@ func (h Handler) delete(c echo.Context) error {
 		return c.String(http.StatusExpectationFailed, "ID must be integer.")
 	}
 
-	log := c.Logger()
-
 	err = h.todoRepo.delete(int64(id))
 	if err != nil {
-		log.Fatal("An error occured while executing query: %v", err)
+		return c.JSON(http.StatusInternalServerError, nil)
 	}
 
-	return c.String(http.StatusOK, "")
+	return c.String(http.StatusNoContent, "")
 }
 
 func (h Handler) retrieve(c echo.Context) error {
-	log := c.Logger()
-
 	idStr := c.Param("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		return c.String(http.StatusExpectationFailed, "ID must be integer.")
 	}
 
-	log.Error("get todo", id)
-
 	todo, err := h.todoRepo.get(int64(id))
 	if err != nil {
-		return c.NoContent(http.StatusNotFound)
+		if errors.Is(err, ErrNotFound) {
+			c.NoContent(http.StatusNotFound)
+		}
+		return c.JSON(http.StatusInternalServerError, nil)
 	}
 
 	return c.JSON(http.StatusOK, todo)
@@ -85,6 +87,7 @@ func (h Handler) _getFormValues(c echo.Context, todo *Todo) (err error) {
 	return
 }
 
+// TODO: refactor to use Bind
 func (h Handler) update(c echo.Context) error {
 	log := c.Logger()
 

@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 
 	_ "github.com/lib/pq"
 )
@@ -33,12 +32,12 @@ func (t TodoRepository) list() ([]Todo, error) {
 func (t TodoRepository) get(id int64) (Todo, error) {
 	var res Todo
 
-	rows, err := t.db.Query("SELECT * FROM todos WHERE id=$1", id)
+	rows, err := t.db.Query("SELECT * FROM todos WHERE id=$1 LIMIT 1", id)
 	if err != nil {
 		return res, err
 	}
 	if !rows.Next() {
-		return res, errors.New(fmt.Sprintf("Object with id: %d does not exist.", id))
+		return res, ErrNotFound
 	}
 	if err := rows.Scan(&res.ID, &res.Description, &res.IsDone); err != nil {
 		return res, err
@@ -77,3 +76,6 @@ func (t TodoRepository) update(id int64, data Todo) (err error) {
 	}
 	return nil
 }
+
+
+var ErrNotFound = errors.New("DB entry not found")
