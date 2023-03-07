@@ -15,6 +15,7 @@ func main() {
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
+	defer db.Close()
 
 	repo := TodoRepository{db: db}
 	h := Handler{todoRepo: repo}
