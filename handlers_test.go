@@ -14,34 +14,42 @@ import (
 )
 
 type DummyRepo struct {
-	listCallCount   int
 	listReturnValue []Todo
 	listReturnError error
+
+	createReturnValue Todo
+	createReturnError error
+
+	deleteReturnError error
+
+	getReturnValue Todo
+	getReturnError error
+
+	updateReturnError error
 }
 
 func (dr DummyRepo) list() ([]Todo, error) {
-	dr.listCallCount++
 	return dr.listReturnValue, dr.listReturnError
 }
 
 func (dr DummyRepo) get(id int64) (Todo, error) {
-	return Todo{}, nil
+	return dr.getReturnValue, dr.getReturnError
 }
 
 func (dr DummyRepo) create(todo Todo) (Todo, error) {
-	return todo, nil
+	return dr.createReturnValue, dr.createReturnError
 }
 
 func (dr DummyRepo) delete(id int64) error {
-	return errors.New("")
+	return dr.deleteReturnError
 }
 
 func (dr DummyRepo) update(id int64, todo Todo) error {
-	return nil
+	return dr.updateReturnError
 }
 
-func TestList(t *testing.T) {
-	listReturnValue := [3]Todo{
+func TestListSuccess(t *testing.T) {
+	listReturnValue := []Todo{
 		{
 			ID:          1,
 			Description: "asdasdasd",
@@ -70,7 +78,7 @@ func TestList(t *testing.T) {
 	h := &Handler{todoRepo: dr}
 
 	require.NoError(t, h.list(c))
-	assert.Equal(t, http.StatusOK, rec.Code, "Status should be OK.")
+	assert.Equal(t, rec.Code, http.StatusOK, "Status should be OK.")
 	var data []Todo
 	json.Unmarshal(rec.Body.Bytes(), &data)
 	assert.Equal(t, data, listReturnValue, "Response data should match.")
@@ -90,7 +98,7 @@ func TestListRepositoryError(t *testing.T) {
 	h := &Handler{todoRepo: dr}
 
 	require.NoError(t, h.list(c))
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, "Status should be 500.")
+	assert.Equal(t, rec.Code, http.StatusServiceUnavailable, "Status should be 500.")
 	var data ErrorResponse
 	json.Unmarshal(rec.Body.Bytes(), &data)
 	assert.Equal(t, ErrorResponse{Detail: "Error connecting to the database."}, data, "Response data should match.")
@@ -116,7 +124,7 @@ func TestCreateSuccess(t *testing.T) {
 	h := &Handler{todoRepo: dr}
 
 	require.NoError(t, h.create(c))
-	assert.Equal(t, http.StatusCreated, rec.Code, "Status should be Created.")
+	assert.Equal(t, rec.Code, http.StatusCreated, "Status should be Created.")
 	var data Todo
 	json.Unmarshal(rec.Body.Bytes(), &data)
 	assert.Equal(t, data, returnedTodo, "Response data should match.")
@@ -137,7 +145,7 @@ func TestCreateParseError(t *testing.T) {
 	h := &Handler{todoRepo: dr}
 
 	require.NoError(t, h.create(c))
-	require.Equal(t, http.StatusBadRequest, rec.Code, "Status should be BadRequest.")
+	require.Equal(t, rec.Code, http.StatusBadRequest, "Status should be BadRequest.")
 	var data ErrorResponse
 	json.Unmarshal(rec.Body.Bytes(), &data)
 	assert.Equal(t, ErrorResponse{Detail: "Error parsing data."}, data, "Response data should match.")
@@ -157,7 +165,7 @@ func TestCreateDBError(t *testing.T) {
 	h := &Handler{todoRepo: dr}
 
 	require.NoError(t, h.create(c))
-	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "Status should be 500.")
+	require.Equal(t, rec.Code, http.StatusServiceUnavailable, "Status should be 500.")
 	var data ErrorResponse
 	json.Unmarshal(rec.Body.Bytes(), &data)
 	assert.Equal(t, ErrorResponse{Detail: "Database error."}, data, "Response data should match.")
@@ -344,15 +352,97 @@ func TestUpdateSuccess(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	c.SetPath("/todos/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("1")
 
 	h := &Handler{todoRepo: dr}
 
-	if assert.NoError(t, h.list(c)) {
-		assert.Equal(t, rec.Code, http.StatusOK, "Status should be OK.")
-		var data [3]Todo
-		json.Unmarshal(rec.Body.Bytes(), &data)
-		assert.Equal(t, data, listReturnValue, "Response data should match.")
+	require.NoError(t, h.update(c))
+	assert.Equal(t, http.StatusOK, rec.Code, "Status should be OK.")
+	var data Todo
+	json.Unmarshal(rec.Body.Bytes(), &data)
+	assert.Equal(t, data, returnedTodo, "Response data should match.")
+}
+func TestUpdateDBError(t *testing.T) {
+	dr := DummyRepo{
+		updateReturnError: errors.New(""),
 	}
+	todoJSON := `{"description":"ASD", "is_done": true}`
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/todos/1", strings.NewReader(todoJSON))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetPath("/todos/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+
+	h := &Handler{todoRepo: dr}
+
+	require.NoError(t, h.update(c))
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, "Status should be 500.")
+	var data ErrorResponse
+	json.Unmarshal(rec.Body.Bytes(), &data)
+	assert.Equal(t, ErrorResponse{Detail: "Couldn't update todo: 1"}, data, "Error detail must match.")
+}
+func TestUpdatePathParseError(t *testing.T) {
+	dr := DummyRepo{}
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/todos/asd", strings.NewReader(``))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetPath("/todos/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("asd")
+
+	h := &Handler{todoRepo: dr}
+
+	require.NoError(t, h.update(c))
+	require.Equal(t, http.StatusBadRequest, rec.Code, "Status should be BadRequest.")
+	var data ErrorResponse
+	json.Unmarshal(rec.Body.Bytes(), &data)
+	assert.Equal(t, ErrorResponse{Detail: "ID must be integer."}, data, "Error detail must match.")
+}
+func TestUpdateDataParseError(t *testing.T) {
+	dr := DummyRepo{}
+	todoJSON := `{"description": "Asd", "is_done": "Asd"}`
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(todoJSON))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	h := &Handler{todoRepo: dr}
+
+	require.NoError(t, h.create(c))
+	require.Equal(t, rec.Code, http.StatusBadRequest, "Status should be BadRequest.")
+	var data ErrorResponse
+	json.Unmarshal(rec.Body.Bytes(), &data)
+	assert.Equal(t, ErrorResponse{Detail: "Error parsing data."}, data, "Response data should match.")
+}
+func TestUpdateGetError(t *testing.T) {
+	dr := DummyRepo{
+		getReturnError: errors.New(""),
+	}
+	todoJSON := `{"description": "Asd", "is_done": true, "id": 1}`
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(todoJSON))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetPath("/todos/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+
+	h := &Handler{todoRepo: dr}
+
+	require.NoError(t, h.update(c))
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, "Status should be 500.")
+	var data ErrorResponse
+	json.Unmarshal(rec.Body.Bytes(), &data)
+	assert.Equal(t, ErrorResponse{Detail: "Couldn't get updated data."}, data, "Response data should match.")
 }
 
 func TestUpdateValidationFail(t *testing.T) {

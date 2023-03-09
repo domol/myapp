@@ -95,12 +95,12 @@ func (h Handler) update(c echo.Context) error {
 
 	err = h.todoRepo.update(int64(id), data)
 	if err != nil {
-		return getServerErrorResponse(c, fmt.Sprintf("Couldn't update todo: %v", err))
+		return getServerErrorResponse(c, fmt.Sprintf("Couldn't update todo: %v", id))
 	}
 
 	todo, err := h.todoRepo.get(int64(id))
 	if err != nil {
-		getServerErrorResponse(c, fmt.Sprintf("An error occured while executing query: %v", err))
+		return getServerErrorResponse(c, "Couldn't get updated data.")
 	}
 	return c.JSON(http.StatusOK, todo)
 }
